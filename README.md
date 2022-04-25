@@ -7,7 +7,7 @@ Valsa and Brancik also coded a MATLAB implementation of their numerical inverse 
 
 INVLAP.py is a Python implentation of Valsa and Brancik's method for numerical inverse Laplace transforms.  It is essentially an translation of the MATLAB code containted in INVLAP.m.  The method can be used to quickly find the inverse Laplace transform f(t) of complex-valued functions F(s).
 
-```
+```python
 #################################################################
 ## Example use of the INVLAP() function in INVLAP.py.          ##
 #################################################################
