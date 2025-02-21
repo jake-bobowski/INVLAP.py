@@ -78,45 +78,45 @@ Created on Fri Apr 23 19:18:36 2022
 #   from scipy import *
 # and the function itself uses:
 #   from numpy import *
-from numpy import *
-import math
-import time
+#from numpy import *
+#import math
+#import time
 
 # Here's the start of the INVLAP function.  The first 4 arguments are required
 # The last three have default values set when alternative values are not
 # specified by the user.
-def INVLAP(Fs, tini, tend, nnt, a = 6, ns = 20, nd = 19):
-    radt = linspace(tini, tend, nnt)
+#def INVLAP(Fs, tini, tend, nnt, a = 6, ns = 20, nd = 19):
+#    radt = linspace(tini, tend, nnt)
 # An initial time tini - 0 is not allowed.  If the user specifies tini = 0,
 # make a minor adjustment so that the function will still execute without
 # an error.    
-    if tini == 0:
-        radt = radt[1:]
-        nnt = nnt - 1
-    t = time.time()
-    alfa = []
-    beta = []
-    for n in range(ns + nd + 1):
-        alfa = alfa + [a + n*pi*1j]
-        beta = beta + [-exp(a)*(-1)**(n + 1)]
-    beta = array(beta)
-    bdifSub = []
-    for n in arange(1, nd + 1):
-       bdifSub = bdifSub + [math.gamma(nd + 1)/math.gamma(nd + 2 - n)/math.gamma(n)]
-    bdif = flip(cumsum(bdifSub))/2**nd
-    beta[ns + 1:ns + nd + 1] = beta[ns + 1:ns + nd + 1]*bdif
-    beta[0]=beta[0]/2
-    ft = []
-    for kt in range(nnt):
-        tt = radt[kt]
-        s = alfa/tt
-        bt = beta/tt
-        btF = bt*eval(Fs) 
-        ft = ft + [sum(real(btF))]
-    elapsed = time.time() - t
+#    if tini == 0:
+#        radt = radt[1:]
+#        nnt = nnt - 1
+#    t = time.time()
+#    alfa = []
+#    beta = []
+#    for n in range(ns + nd + 1):
+#        alfa = alfa + [a + n*pi*1j]
+#        beta = beta + [-exp(a)*(-1)**(n + 1)]
+#    beta = array(beta)
+#    bdifSub = []
+#    for n in arange(1, nd + 1):
+#       bdifSub = bdifSub + [math.gamma(nd + 1)/math.gamma(nd + 2 - n)/math.gamma(n)]
+#    bdif = flip(cumsum(bdifSub))/2**nd
+#    beta[ns + 1:ns + nd + 1] = beta[ns + 1:ns + nd + 1]*bdif
+#    beta[0]=beta[0]/2
+#    ft = []
+#    for kt in range(nnt):
+#        tt = radt[kt]
+#        s = alfa/tt
+#        bt = beta/tt
+#        btF = bt*eval(Fs) 
+#        ft = ft + [sum(real(btF))]
+#    elapsed = time.time() - t
 # Print the elapsed time.
-    print("Elasped time", "{:.3f}".format(elapsed), "seconds.")
-    return radt, ft
+#    print("Elasped time", "{:.3f}".format(elapsed), "seconds.")
+#    return radt, ft
 
 ## Example use of the INVLAP() function in INVLAP.py.  
 ## Calculate the transient response of a length of transmission line.  
@@ -162,3 +162,105 @@ def INVLAP(Fs, tini, tend, nnt, a = 6, ns = 20, nd = 19):
 #
 ## Plot the results.
 #plt.plot(t, fcn)
+
+
+
+
+
+
+
+
+
+
+## An optimized version of the INVLAP function written with the assistance of
+## CHATgpt and the original INVLAP script written by Juraj Valsa and Lubomir
+## Brancik.  
+## February 19, 2025  
+
+
+from numpy import *
+import time
+import scipy.special as sp
+
+def INVLAP(Fs, tini, tend, nnt, a = 6, ns = 20, nd = 19):
+    # Generate time array
+    radt = linspace(tini, tend, nnt)
+    
+    # If tini == 0, adjust the time vector and nnt
+    if tini == 0:
+        radt = radt[1:]
+        nnt -= 1
+
+    # Start timing
+    t = time.time()
+
+    # Precompute alpha and beta arrays
+    alfa = a + (arange(ns + nd + 1) * pi * 1j)
+    beta = (-exp(a) * (-1) ** (arange(ns + nd + 1) + 1))
+
+    # Adjust beta values for the additional terms
+    bdifSub = sp.gamma(nd + 1) / (sp.gamma(nd + 2 - arange(1, nd + 1)) * sp.gamma(arange(1, nd + 1)))
+    bdif = flip(cumsum(bdifSub)) / 2 ** nd
+    beta[ns + 1:ns + nd + 1] *= bdif
+    beta[0] /= 2
+
+    # Initialize the ft array
+    ft = zeros(nnt)
+
+    # Loop over each time step instead of using broadcasting
+    for kt in range(nnt):
+        tt = radt[kt]
+        
+        # Broadcast for each time step and calculate btF for each time step
+        s = alfa / tt
+        bt = beta / tt
+        btF = bt * Fs(s)
+        
+        # Sum and store the result
+        ft[kt] = real(sum(btF))
+    
+    # Elapsed time
+    elapsed = time.time() - t
+    print(f"Elapsed time: {elapsed:.3f} seconds.")
+    
+    return radt, ft
+
+def F(s, Z0, v0, ell, Rg, V0):
+    # Lower the clamping threshold further
+    max_value = 300  # Reduced max value for better control
+    s_clamped = where(abs(s * ell / v0) > max_value, sign(s) * max_value, s * ell / v0)
+    return (V0 / s) * (1 / ((Rg / Z0) * tanh(s_clamped) + 1))
+
+
+
+
+# # Example use of the INVLAP() function in INVLAP.py.
+# # Calculate the transient response of a length of transmission line.
+# # A voltage step is applied at one end of a trasmission line with
+# # characteristic impedance Z0 = 50 ohms.  The voltage source has output
+# # impedance Rg = 1000 ohms.  The opposite end of the transmission line is
+# # open.  The voltage is measured at the node between Rg and the input of the
+# # transmission line. For more details, see Am. J. Phys. 89, 96 (2021) -
+# # DOI: https://doi.org/10.1119/10.0001896 or:
+# # https://arxiv.org/abs/2006.14381
+
+# # Import the function
+# import INVLAP
+# import matplotlib.pyplot as plt
+
+# # Define your parameters
+# Z0 = 50
+# v0 = 0.6795 * 3e8
+# ell = 6.32
+# V0 = 1
+# Rg = 1000
+
+# # Use F directly in the INVLAP function
+# Fs = lambda s: INVLAP.F(s, Z0, v0, ell, Rg, V0)
+
+# # Reduce nnt for testing to see if it helps with performance
+# nnt = 1000  # Start with a smaller number of time steps
+# t, fcn = INVLAP.INVLAP(Fs, 1e-10, 0.25e-5, nnt, 6, 8000, 160)
+
+# plt.plot(t, fcn)
+# plt.show()
